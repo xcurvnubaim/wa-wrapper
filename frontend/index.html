@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WA Bot Frontend</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Bootstrap CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f8f9fa; }
+        .container { max-width: 600px; margin-top: 40px; }
+        .card { margin-bottom: 2em; }
+        #qr-img { margin-top: 1em; }
+        .status { margin-top: 1em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4 text-center">WhatsApp Bot Frontend</h1>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">API Health</h5>
+                <button class="btn btn-outline-primary" onclick="checkHealth()">Check Health</button>
+                <div id="health-status" class="status"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">QR Code</h5>
+                <button class="btn btn-outline-success" onclick="getQrCode()">Get QR Code</button>
+                <div id="qr-code"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Send WhatsApp Message</h5>
+                <form id="send-form">
+                    <div class="mb-3">
+                        <label for="key" class="form-label">API Key:</label>
+                        <input type="text" class="form-control" id="key" required />
+                    </div>
+                    <div class="mb-3">
+                        <label for="number" class="form-label">Phone Number (country code + number, digits only):</label>
+                        <input type="text" class="form-control" id="number" required pattern="^\d+$" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="message" class="form-label">Message:</label>
+                        <textarea class="form-control" id="message" required rows="3"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Send Message</button>
+                </form>
+                <div id="send-result" class="status"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let healthInterval = null;
+
+        async function checkHealth(auto = false) {
+            const statusDiv = document.getElementById('health-status');
+            if (!auto) statusDiv.innerHTML = '<div class="text-secondary">Checking...</div>';
+            try {
+                const res = await fetch('/health');
+                const data = await res.json();
+                statusDiv.innerHTML = `<div class="fw-bold ${data.success ? 'text-success' : 'text-danger'}">${data.message}</div>`;
+                if (data.success && healthInterval) {
+                    clearInterval(healthInterval);
+                    healthInterval = null;
+                }
+            } catch (e) {
+                statusDiv.innerHTML = '<div class="text-danger">Error checking health.</div>';
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            checkHealth(true);
+            healthInterval = setInterval(() => checkHealth(true), 3000);
+        });
+
+        async function getQrCode() {
+            const qrDiv = document.getElementById('qr-code');
+            qrDiv.innerHTML = '<div class="text-secondary">Loading...</div>';
+            try {
+                const res = await fetch('/qr-code');
+                const data = await res.json();
+                if (data.success && data.qrCode) {
+                    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(data.qrCode)}&size=200x200`;
+                    qrDiv.innerHTML = `<img id="qr-img" class="img-thumbnail" src="${qrUrl}" alt="QR Code" />`;
+                } else {
+                    qrDiv.innerHTML = `<div class="text-danger">${data.error || 'QR code not available.'}</div>`;
+                }
+            } catch (e) {
+                qrDiv.innerHTML = '<div class="text-danger">Error fetching QR code.</div>';
+            }
+        }
+
+        document.getElementById('send-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const number = document.getElementById('number').value.trim();
+            const message = document.getElementById('message').value.trim();
+            const secret = document.getElementById('key').value.trim();
+            const resultDiv = document.getElementById('send-result');
+            resultDiv.innerHTML = '<div class="text-secondary">Sending...</div>';
+            try {
+                const res = await fetch('/send-message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ number, message, secret })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    resultDiv.innerHTML = `<div class="text-success">Message sent! ID: <code>${data.messageId}</code></div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="text-danger">${data.error || 'Failed to send message.'}</div>`;
+                }
+            } catch (e) {
+                resultDiv.innerHTML = '<div class="text-danger">Error sending message.</div>';
+            }
+        });
+    </script>
+</body>
+</html>
